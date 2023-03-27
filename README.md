@@ -2,7 +2,7 @@
 
 ## 1. How to use
 
-###　1.1 Dataset preparation
+### 1.1 Dataset preparation
 1. Dataset download
     - [Broden dataset download](https://github.com/CSAILVision/NetDissect)
         ```
