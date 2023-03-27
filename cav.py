@@ -13,30 +13,33 @@ if __name__ == "__main__":
                         help='Number of images to be included in each folder')
     parser.add_argument('--number_of_random_folders', type=int, default=3,
                         help='Number of folders with random examples that we will generate for tcav')
+    parser.add_argument('--yaml', type=str, help='Load parameters from yaml')
 
     args = parser.parse_args()
+    if args.yaml != None:
+        yaml = load_yaml(args.yaml)
+        parser.set_defaults(**yaml)
+        args = parser.parse_args()
 
+    print("Args is: ", args.__dict__)
     # source_dir: where images of concepts, target class and random images (negative samples when learning CAVs) live. Each should be a sub-folder within this directory. 
     source_dir = args.source_dir
-
+    
     # directory to store CAVs
     cav_dir = source_dir + '/cavs/'
     make_dir_if_not_exists(cav_dir)
 
+    activation_dir =  source_dir + '/activations/'
+    make_dir_if_not_exists(activation_dir)
+    bottlenecks = ['Mixed_5d', 'Conv2d_2a_3x3']
 
-    yaml = load_yaml("cav.yaml")
+    # this is a regularizer penalty parameter for linear classifier to get CAVs. 
+    alphas = [0.1]
 
-
-    # activation_dir =  source_dir + '/activations/'
-    # bottlenecks = ['Mixed_5d', 'Conv2d_2a_3x3']
-
-    # # this is a regularizer penalty parameter for linear classifier to get CAVs. 
-    # alphas = [0.1]
-
-    # target = 'zebra'  
-    # concepts = ["dotted","striped","zigzagged"]
+    target = args.target_classes[0]
+    concepts = args.interested_concepts
     # random_counterpart = 'random500_1'
-
+    model_name = args.model_name
     # LABEL_PATH = './imagenet_comp_graph_label_strings.txt'
 
-    # model = model_load()
+    model = model_load(model_name)

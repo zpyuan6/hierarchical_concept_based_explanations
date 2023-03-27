@@ -124,9 +124,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    make_dir_if_not_exists(args.source_dir)
     # source_dir: where images of concepts, target class and random images (negative samples when learning CAVs) live. Each should be a sub-folder within this directory. 
+    make_dir_if_not_exists(args.source_dir)
 
     save_yaml(args.__dict__, "cav.yaml")
 
-    # make_concepts_and_randoms(args.source_dir,args.number_of_images_per_folder, args.number_of_random_folders, args.broden_dataset_path)
+    make_concepts_and_randoms(args.source_dir,args.number_of_images_per_folder, args.number_of_random_folders, args.broden_dataset_path)

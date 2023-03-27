@@ -1,6 +1,11 @@
 # hierarchical_concept_based_explanations
 
 ## 1. How to use
+Python == 
+
+```
+conda create -n h_concept_explanation python=3.
+```
 
 ### 1.1 Dataset preparation
 1. Dataset download

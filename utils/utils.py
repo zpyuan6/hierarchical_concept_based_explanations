@@ -7,8 +7,8 @@ def load_yaml(yaml_path):
   with open(yaml_path,"r") as f:
     content = f.read()
   yamlData = yaml.load(content, yaml.FullLoader)
-  print("load yaml parameters, yaml type:", type(yamlData))
-  print(yamlData)
+  # print("load yaml parameters, yaml type:", type(yamlData))
+  # print(yamlData)
   return yamlData
 
 def save_yaml(data, save_path):
