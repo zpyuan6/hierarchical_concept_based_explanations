@@ -43,3 +43,5 @@ if __name__ == "__main__":
     # LABEL_PATH = './imagenet_comp_graph_label_strings.txt'
 
     model = model_load(model_name)
+
+    
