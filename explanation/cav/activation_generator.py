@@ -1,7 +1,10 @@
+import os
+from PIL import Image 
 import torch
 import torch.nn as nn
+import torchvision.transforms as transforms
 
-class ModelHook():
+class ModelHookManager():
     def __init__(self) -> None:
         self.features = None
         self.hooks = []
@@ -34,13 +37,30 @@ class ActivationGenerator:
         acts_dir: path for saving activations
         interested_layer_name: 
     """
-    def __init__(self, model, acts_dir, interested_layer_name) -> None:
+    def __init__(self, model:nn.Module, acts_dir:str, interested_layer_name:str, input_size=[299,299], device=None) -> None:
         self.model = model
         self.acts_dir = acts_dir
+        self.hook_manager = ModelHookManager()
+        self.interested_layer_name = interested_layer_name
+        self.hook_manager.register_hook(self.model, interested_layer_name)
+        self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.input_size = input_size
 
-    def get_activations_for_folder(self, is_save=True):
-        self.model
+    def update_acts_dir(self, acts_dir):
+        self.acts_dir = acts_dir
 
-    def get_activation_for_example(self, example):
-        self.model
-        return reshape_activations(acts).squeeze()
+    def get_activations_for_folder(self, dataset_path, is_save=True):
+        crop = transforms.Compose([
+            transforms.Resize(self.input_size),
+            transforms.ToTensor()
+        ])
+
+        for root, folders, files in os.walk(dataset_path):
+            for file in files:
+                with torch.no_grad():
+                    img = Image.open(os.path.join(root,file))
+                    img = crop(img).unsqueeze(0).to(self.device)
+                    prediction = self.model(img)
+                    print(file)
+
+                    torch.save(self.hook_manager.features.cpu(),os.path.join(self.acts_dir,f"{self.interested_layer_name}_{file.split('.')[0]}.pt"))
