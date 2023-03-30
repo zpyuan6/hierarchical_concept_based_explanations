@@ -1,8 +1,11 @@
 import argparse
+import os
+from multiprocessing import dummy as multiprocessing
 
 from models.model_load import model_load
 from utils.utils import make_dir_if_not_exists, load_yaml
-
+from explanation.cav.activation_generator import ActivationGenerator
+from explanation.cav.train import get_or_train_cav
 
 # Reference docs https://github.com/tensorflow/tcav/blob/b922c44bcc64c6bdddb8f661d732fa2145c99d95/Run_TCAV.ipynb
 if __name__ == "__main__":
@@ -26,22 +29,29 @@ if __name__ == "__main__":
     source_dir = args.source_dir
     
     # directory to store CAVs
-    cav_dir = source_dir + '/cavs/'
+    cav_dir = os.path.join(source_dir, "cavs")
     make_dir_if_not_exists(cav_dir)
 
-    activation_dir =  source_dir + '/activations/'
+    activation_dir = os.path.join(source_dir, "activations")
     make_dir_if_not_exists(activation_dir)
     bottlenecks = ['Mixed_5d', 'Conv2d_2a_3x3']
 
     # this is a regularizer penalty parameter for linear classifier to get CAVs. 
     alphas = [0.1]
 
-    target = args.target_classes[0]
-    concepts = args.interested_concepts
+    # target = args.target_classes[0]
+    # concepts = args.interested_concepts
     # random_counterpart = 'random500_1'
     model_name = args.model_name
     # LABEL_PATH = './imagenet_comp_graph_label_strings.txt'
 
     model = model_load(model_name)
 
-    
+    activation_generator = ActivationGenerator(model,activation_dir,bottlenecks)
+
+    for root, folders, files in os.walk(source_dir):
+        if not root.split("\\")[-1] in ["cavs","activations"]:
+            for folder in folders:
+                if not folder in ["cavs","activations"]:
+                    activation_generator.get_activations_for_folder(
+                        os.path.join(source_dir,folder))
