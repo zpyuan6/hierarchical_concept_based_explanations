@@ -1,0 +1,11 @@
+broden_dataset_path: F:\Broden
+interested_concepts:
+- striped
+- dotted
+- zigzagged
+number_of_images_per_folder: 50
+number_of_random_folders: 3
+source_dir: F:\hierarchical_concept_explanation\
+target_classes:
+- zebra
+model_name: inceptionv3
