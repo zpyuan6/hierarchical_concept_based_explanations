@@ -2,34 +2,12 @@ import os
 from tqdm import tqdm
 from PIL import Image 
 import numpy as np
+from multiprocessing import dummy as multiprocessing
 
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-
-class ModelHookManager():
-    def __init__(self) -> None:
-        self.features = None
-        self.hooks = []
-
-    def hook(self, module, input, output):
-        if self.features != None:
-            self.features.append(output.clone())
-        else:
-            self.features = [output.clone()]
-
-    def register_hook(self,model:nn.Module,layer_name:str):
-        hook = model._modules[layer_name].register_forward_hook(self.hook)
-        self.hooks.append(hook)
-
-    def remove_hook(self):
-        for hook in self.hooks:
-            hook.remove()
-        self.features = []
-
-    def clean_features(self):
-        del self.features
-        self.features = None
+from model_hook_manager import ModelHookManager
 
 class ActivationGenerator:
     """ Downloads an image.
@@ -40,17 +18,15 @@ class ActivationGenerator:
         acts_dir: path for saving activations
         interested_layer_name: 
     """
-    def __init__(self, model:nn.Module, acts_dir:str, input_size=[299,299], device=None) -> None:
+    def __init__(self, model:nn.Module, source_dir:str, acts_dir:str=None, input_size=[299,299], device=None) -> None:
         self.model = model
-        self.acts_dir = acts_dir
+        self.source_dir = source_dir
+        self.acts_dir = acts_dir if acts_dir else os.path.join(self.source_dir, "activations")
         self.hook_manager = ModelHookManager()
-        self.interested_layer_names = interested_layer_names
-        for interested_layer_name in self.interested_layer_names:
-            self.hook_manager.register_hook(self.model, interested_layer_name)
         self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.input_size = input_size
 
-    def get_activations_for_folder(self, dataset_path, concepts:list, interested_layer_names:list, is_save=True):
+    def process_and_load_activations(self, interested_layer_names:list, concepts:list):
         """
         return 
             activation_results: activation objects {""}
@@ -60,54 +36,93 @@ class ActivationGenerator:
         for concept in concepts:
             if concept not in acts:
                 acts[concept] = {}
-            for bottleneck_name in self.interested_layer_names:
-                acts_path = os.path.join(self.acts_dir, 'acts_{}_{}'.format(concept, bottleneck_name)) if self.acts_dir else None
-                if acts_path and os.path.exists(acts_path):
+            for bottleneck_name in interested_layer_names:
+                acts_path = os.path.join(self.acts_dir, 'acts_{}_{}'.format(concept, bottleneck_name))
+                if os.path.exists(acts_path):
                     # Load activations from acts_path for a certain concept and a bottleneck
                     with open(acts_path, 'rb') as f:
                         acts[concept][bottleneck_name] = np.load(f, allow_pickle=True).squeeze()
                         print(('Loaded {} shape {}'.format(acts_path, acts[concept][bottleneck_name].shape)))
                 else:
+                    # Process activations
                     acts[concept][bottleneck_name] = self.get_activations_for_concept(concept, bottleneck_name)
+                    print('{} does not exist, Making one...'.format(acts_path))
+                    with open(acts_path, 'wb') as f:
+                        np.save(f, acts[concept][bottleneck_name])
 
         return acts
+
+    def get_examples_for_concept(self, concept):
+        concept_dir = os.path.join(self.source_dir,concept)
+        img_paths = []
+
+        for root,folders,files in os.walk(concept_dir):
+            for file in files:
+                img_paths.append(os.path.join(concept_dir,file))
+        
+        imgs = self.load_image_from_files(img_paths)
+
+        return imgs
+
+    def load_image_from_file(self, file_path):
+        crop = transforms.Compose([
+            transforms.Resize(self.input_size),
+            transforms.ToTensor()
+        ])
+
+        img = Image.open(file_path)
+        img = img.convert('RGB')
+        img = crop(img).unsqueeze(0)
+
+        return img
+
+    def load_image_from_files(self, files_list, do_shuffle=True, run_parallel=True):
+        imgs=[]
+        filesnames = files_list[:]
+
+        if do_shuffle:
+            np.random.shuffle(filesnames)
+
+        if run_parallel:
+            pool = multiprocessing.Pool()
+            imgs = pool.map(
+                lambda filename: self.load_image_from_file(filename),
+                filesnames[:])
+            pool.close()
+            imgs = [img for img in imgs if img is not None]
+            if len(imgs) <= 1:
+                raise ValueError(
+                    'You must have more than 1 image in each class to run TCAV.')
+        else:
+            for filename in files_list:
+                img = self.load_image_from_file(filename)
+            if img is not None:
+                imgs.append(img)
+
+            if len(imgs) <= 1:
+                raise ValueError(
+                    'You must have more than 1 image in each class to run TCAV.')
+
+        return imgs
 
     def get_activations_for_concept(self, concept, bottleneck):
-        # activation_save_paths = []
-        # for interested_layer_name in self.interested_layer_names:
-        #     activation_save_path = os.path.join(self.acts_dir,interested_layer_name,dataset_path.split("\\")[-1])
-        #     activation_save_paths.append(activation_save_path)
-        #     print("activation_save_path: ", activation_save_path)
-        #     if is_save and (not os.path.exists(activation_save_path)):
-        #         os.makedirs(activation_save_path)
+        examples = self.get_examples_for_concept(concept)
 
-        # crop = transforms.Compose([
-        #     transforms.Resize(self.input_size),
-        #     transforms.ToTensor()
-        # ])
+        self.hook_manager.register_hook(self.model, bottleneck)
 
-        # self.model.to(self.device)
-        # self.model.eval()
+        self.model.to(self.device)
+        self.model.eval()
 
-        # activation_results = {}
-        # for root, folders, files in os.walk(dataset_path):
-        #     with tqdm(total=len(files),desc=f"Start processing images under {root}") as tbar:
-        #         for file in files:
-        #             with torch.no_grad():
-        #                 img = Image.open(os.path.join(root,file))
-        #                 img = img.convert('RGB')
-        #                 img = crop(img).unsqueeze(0).to(self.device)
-        #                 prediction = self.model(img)
-        #                 tbar.update(1)
-                        
-        #                 for i,activation_save_path in enumerate(activation_save_paths):
-        #                     if is_save:
-        #                         torch.save(self.hook_manager.features[i].cpu(),os.path.join(activation_save_path,f"{file.split('.')[0]}.pt"))
-                            
-        #                     if not interested_layer_name[i] in activation_results:
-        #                         activation_results[interested_layer_name[i]] = {dataset_path.split("\\")[-1]:[self.hook_manager.features[i].cpu()]}
-        #                     else:
-        #                         activation_results[interested_layer_name[i]][dataset_path.split("\\")[-1]].append(self.hook_manager.features[i].cpu())
-        #                 self.hook_manager.clean_features()
-                        
-        return acts
+        activation_results = []
+        with tqdm(total=len(examples)) as tbar:
+            for example in examples:
+                with torch.no_grad():
+                    input = example.to(self.device)
+                    prediction = self.model(input)
+                    tbar.update(1)
+                    activation_results.append(self.hook_manager.features[0].cpu().numpy())
+                    self.hook_manager.clean_features()
+
+        self.hook_manager.remove_hook()
+
+        return np.array(activation_results)

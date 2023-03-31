@@ -1,11 +1,13 @@
 import argparse
 import os
-from multiprocessing import dummy as multiprocessing
+import numpy as np
+from torchvision.datasets import ImageNet
 
 from models.model_load import model_load
 from utils.utils import make_dir_if_not_exists, load_yaml
 from explanation.cav.activation_generator import ActivationGenerator
-from explanation.cav.train import get_or_train_cav
+from explanation.cav.cav import get_or_train_cav, CAV
+from explanation.cav.tcav import compute_tcav_score,get_direction_dir
 
 # Reference docs https://github.com/tensorflow/tcav/blob/b922c44bcc64c6bdddb8f661d732fa2145c99d95/Run_TCAV.ipynb
 if __name__ == "__main__":
@@ -39,19 +41,84 @@ if __name__ == "__main__":
     # this is a regularizer penalty parameter for linear classifier to get CAVs. 
     alphas = [0.1]
 
-    # target = args.target_classes[0]
-    # concepts = args.interested_concepts
+    target = 'zebra'
+    concepts = ["dotted","striped","zigzagged"]  
     # random_counterpart = 'random500_1'
     model_name = args.model_name
     # LABEL_PATH = './imagenet_comp_graph_label_strings.txt'
+    imagenet_dataset_path = "F:\\ImageNet"
 
     model = model_load(model_name)
 
-    activation_generator = ActivationGenerator(model,activation_dir,bottlenecks)
+    # Get acts
+    activation_generator = ActivationGenerator(model,source_dir)
+    acts = activation_generator.process_and_load_activations(bottlenecks, concepts+[target])
 
-    for root, folders, files in os.walk(source_dir):
-        if not root.split("\\")[-1] in ["cavs","activations"]:
-            for folder in folders:
-                if not folder in ["cavs","activations"]:
-                    activation_generator.get_activations_for_folder(
-                        os.path.join(source_dir,folder))
+    # Get CAVs
+    cav_instance = get_or_train_cav(
+                    concepts,
+                    bottlenecks[0],
+                    acts,
+                    cav_dir=cav_dir,
+                    cav_hparams=None,
+                    overwrite=False)
+
+    # clean up
+    for c in concepts:
+        del acts[c]
+
+    # Hypo testing
+    cav_hparams = CAV.default_hparams()
+    a_cav_key = CAV.cav_key(concepts, bottlenecks[0], cav_hparams['model_type'],
+                            cav_hparams['alpha'])
+
+    target_class_for_compute_tcav_score = bottlenecks[0]
+
+    cav_concept = concepts[0]
+
+    class_dir = ImageNet(imagenet_dataset_path, download=False).class_to_idx
+    id_to_class_dir = {value:key for (key,value) in class_dir.items()}
+    
+    i_up = compute_tcav_score(
+        model, 
+        class_dir, 
+        target_class_for_compute_tcav_score, 
+        cav_concept,
+        cav_instance, 
+        acts[target][cav_instance.bottleneck],
+        activation_generator.get_examples_for_concept(target),
+        )
+
+    waiting edit
+
+
+    result = {
+        'cav_key':
+            a_cav_key,
+        'cav_concept':
+            cav_concept,
+        'negative_concept':
+            concepts[1],
+        'target_class':
+            bottlenecks[0],
+        'cav_accuracies':
+            cav_instance.accuracies,
+        'i_up':
+            i_up,
+        'val_directional_dirs_abs_mean':
+            np.mean(np.abs(val_directional_dirs)),
+        'val_directional_dirs_mean':
+            np.mean(val_directional_dirs),
+        'val_directional_dirs_std':
+            np.std(val_directional_dirs),
+        'val_directional_dirs':
+            val_directional_dirs,
+        'note':
+            'alpha_%s ' % (alpha),
+        'alpha':
+            alpha,
+        'bottleneck':
+            bottleneck
+    }
+
+    del acts

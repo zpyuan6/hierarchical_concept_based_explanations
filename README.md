@@ -15,7 +15,8 @@ pip install -r requirements.txt
         ```
         wget --progress=bar http://netdissect.csail.mit.edu/data/broden1_227.zip -O broden1_227.zip
         ```
-    - [ImageNet dataset download](https://www.image-net.org/index.php) Optional
+    - [ImageNet dataset download](https://www.image-net.org/index.php) 
+        You are required to download ILSVRC2012_devkit_t12.tar.gz for getting class_to_id dictionary for model
 
 2. Data folder making
     As shown in [TCAV start code](https://github.com/tensorflow/tcav/blob/b922c44bcc64c6bdddb8f661d732fa2145c99d95/Run_TCAV.ipynb), you are required to make a data folder (***source_dir***) including
