@@ -16,11 +16,11 @@ class ModelHookManager():
         hook = model._modules[layer_name].register_forward_hook(self.hook)
         self.hooks.append(hook)
 
-    def backward_hook(self, grad_in, grad_out):
-        if self.features != None:
-            self.features.append(grad_out.clone())
+    def backward_hook(self, module, grad_in, grad_out):
+        if self.gradients != None:
+            self.gradients.append(grad_out[0].clone())
         else:
-            self.features = [grad_out.clone()]
+            self.gradients = [grad_out[0].clone()]
 
     def register_backward_hook(self,model:nn.Module,layer_name:str):
         hook = model._modules[layer_name].register_backward_hook(self.backward_hook)

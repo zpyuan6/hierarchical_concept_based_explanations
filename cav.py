@@ -7,7 +7,7 @@ from models.model_load import model_load
 from utils.utils import make_dir_if_not_exists, load_yaml
 from explanation.cav.activation_generator import ActivationGenerator
 from explanation.cav.cav import get_or_train_cav, CAV
-from explanation.cav.tcav import compute_tcav_score,get_direction_dir
+from explanation.cav.tcav import compute_tcav_score, get_directional_dir
 
 # Reference docs https://github.com/tensorflow/tcav/blob/b922c44bcc64c6bdddb8f661d732fa2145c99d95/Run_TCAV.ipynb
 if __name__ == "__main__":
@@ -63,6 +63,7 @@ if __name__ == "__main__":
                     cav_hparams=None,
                     overwrite=False)
 
+
     # clean up
     for c in concepts:
         del acts[c]
@@ -72,25 +73,33 @@ if __name__ == "__main__":
     a_cav_key = CAV.cav_key(concepts, bottlenecks[0], cav_hparams['model_type'],
                             cav_hparams['alpha'])
 
-    target_class_for_compute_tcav_score = bottlenecks[0]
+    target_class_for_compute_tcav_score = target
 
     cav_concept = concepts[0]
 
     class_dir = ImageNet(imagenet_dataset_path, download=False).class_to_idx
     id_to_class_dir = {value:key for (key,value) in class_dir.items()}
-    
+    class_id = class_dir[target_class_for_compute_tcav_score]
+
     i_up = compute_tcav_score(
         model, 
-        class_dir, 
-        target_class_for_compute_tcav_score, 
+        class_id,
         cav_concept,
         cav_instance, 
-        acts[target][cav_instance.bottleneck],
         activation_generator.get_examples_for_concept(target),
         )
 
-    waiting edit
+    print("i_up", i_up)
 
+    val_directional_dirs = get_directional_dir(
+        model,
+        class_id,
+        cav_concept,
+        cav_instance,
+        activation_generator.get_examples_for_concept(target)
+        )
+
+    print("val_directional_dirs", val_directional_dirs)
 
     result = {
         'cav_key':
@@ -113,12 +122,8 @@ if __name__ == "__main__":
             np.std(val_directional_dirs),
         'val_directional_dirs':
             val_directional_dirs,
-        'note':
-            'alpha_%s ' % (alpha),
-        'alpha':
-            alpha,
         'bottleneck':
-            bottleneck
+            bottlenecks[0]
     }
 
     del acts

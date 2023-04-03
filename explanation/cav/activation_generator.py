@@ -1,4 +1,4 @@
-import os
+import os,sys
 from tqdm import tqdm
 from PIL import Image 
 import numpy as np
@@ -7,7 +7,8 @@ from multiprocessing import dummy as multiprocessing
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-from model_hook_manager import ModelHookManager
+
+from explanation.cav.model_hook_manager import ModelHookManager
 
 class ActivationGenerator:
     """ Downloads an image.
