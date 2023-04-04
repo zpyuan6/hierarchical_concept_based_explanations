@@ -63,15 +63,13 @@ if __name__ == "__main__":
                     cav_hparams=None,
                     overwrite=False)
 
-
     # clean up
     for c in concepts:
         del acts[c]
 
     # Hypo testing
     cav_hparams = CAV.default_hparams()
-    a_cav_key = CAV.cav_key(concepts, bottlenecks[0], cav_hparams['model_type'],
-                            cav_hparams['alpha'])
+    a_cav_key = CAV.cav_key(concepts, bottlenecks[0], cav_hparams['model_type'], cav_hparams['alpha'])
 
     target_class_for_compute_tcav_score = target
 
@@ -127,3 +125,5 @@ if __name__ == "__main__":
     }
 
     del acts
+
+    # return result

@@ -1,8 +1,15 @@
 import numpy as np
 from tqdm import tqdm
+import time
+from torchvision.datasets import ImageNet
+
 # from multiprocessing import dummy as multiprocessing
-from explanation.cav.cav import CAV
+from explanation.cav.cav import CAV, get_or_train_cav
 from explanation.cav.gradient_generator import GradientGenerator
+from explanation.cav.activation_generator import ActivationGenerator
+
+
+IMAGENET_DATASET_PATH = "F:\\ImageNet"
 
 def get_direction_dir_sign(cav:CAV, concept, class_id, example, gradient_generator:GradientGenerator):
     """Get the sign of directional derivative.
@@ -72,6 +79,7 @@ def compute_tcav_score(model,
     return float(count) / float(len(examples))
 
 def get_directional_dir(mymodel, class_id, concept, cav:CAV, examples):
+
     """Return the list of values of directional derivatives.
        (Only called when the values are needed as a referece)
     Args:
@@ -101,3 +109,144 @@ def get_directional_dir(mymodel, class_id, concept, cav:CAV, examples):
             tbar.update(1)
 
     return directional_dir_vals
+
+class TCAVRunParams:
+    def __init__(self, 
+                bottleneck,
+                concept,
+                target_class,
+                activation_generator:ActivationGenerator,
+                cav_dir,
+                model,
+                overwrite=True):
+        self.bottleneck = bottleneck
+        self.concept = concept
+        self.target_class = target_class
+        self.activation_generator = activation_generator
+        self.cav_dir = cav_dir
+        self.overwrite = overwrite
+        self.model = model
+
+
+class TCAV:
+    def __init__(self, 
+                target,
+                concepts,
+                bottlenecks,
+                activation_generator,
+                alphas,
+                random_counterpart=None,
+                cav_dir=None,
+                num_random_exp=5,
+                random_concepts=None):
+
+
+    def get_params(self):
+        params = []
+        for bottleneck in self.bottlenecks:
+            for target_in_test, concepts_in_test in self.pairs_to_test:
+                for alpha in self.alphas:
+                  print('%s %s %s %s', bottleneck, concepts_in_test,
+                                  target_in_test, alpha)
+                  params.append({"bottleneck":bottleneck,"concepts":concepts,"target_class":target_class,"activation_generator":activation_generator,"cav_dir":cav_dir:,"overwrite":overwrite,"model":model})
+
+        return params
+
+    def _run_single_set(self, param:TCAVRunParams):
+        model = param.model
+        target_class = param.target_class
+        concept = [param.concept]
+        bottleneck = param.bottleneck
+        cav_dir = param.cav_dir
+        overwrite = param.overwrite
+        activation_generator = param.activation_generator
+
+        print('running %s %s' % (target_class, concept[0]))
+
+        # Get acts
+        acts = activation_generator.process_and_load_activations(bottlenecks, concept+[target])
+
+        # Get CAVs
+        cav_instance = get_or_train_cav(
+                        concept,
+                        bottleneck,
+                        acts,
+                        cav_dir=cav_dir,
+                        cav_hparams=None,
+                        overwrite=overwrite)
+
+        # clean up
+        for c in concept:
+            del acts[c]
+
+        # Hypo testing
+
+        target_class_for_compute_tcav_score = target
+
+        cav_concept = concept
+
+        class_dir = ImageNet(IMAGENET_DATASET_PATH, download=False).class_to_idx
+        class_id = class_dir[target_class_for_compute_tcav_score]
+
+        i_up = compute_tcav_score(
+            model, 
+            class_id,
+            cav_concept,
+            cav_instance, 
+            activation_generator.get_examples_for_concept(target),
+            )
+
+        print("i_up", i_up)
+
+        val_directional_dirs = get_directional_dir(
+            model,
+            class_id,
+            cav_concept,
+            cav_instance,
+            activation_generator.get_examples_for_concept(target)
+            )
+
+        print("val_directional_dirs", val_directional_dirs)
+
+        cav_hparams = CAV.default_hparams()
+        a_cav_key = CAV.cav_key(concept, bottleneck, cav_hparams['model_type'], cav_hparams['alpha'])
+
+        result = {
+            'cav_key':
+                a_cav_key,
+            'cav_concept':
+                cav_concept,
+            'negative_concept':
+                concepts[1],
+            'target_class':
+                target_class,
+            'cav_accuracies':
+                cav_instance.accuracies,
+            'i_up':
+                i_up,
+            'val_directional_dirs_abs_mean':
+                np.mean(np.abs(val_directional_dirs)),
+            'val_directional_dirs_mean':
+                np.mean(val_directional_dirs),
+            'val_directional_dirs_std':
+                np.std(val_directional_dirs),
+            'val_directional_dirs':
+                val_directional_dirs,
+            'bottleneck':
+                bottleneck
+        }
+
+        del acts
+
+        return result
+
+    def run(self):
+        results = []
+        now = time.time()
+
+        for i, param in enumerate(self.params):
+            print('Running param %s of %s' % (i, len(self.params)))
+            results.append(self._run_single_set(param, overwrite=overwrite))
+        print('Done running %s params. Took %s seconds...' % (len(self.params), time.time() - now))
+
+        return results
