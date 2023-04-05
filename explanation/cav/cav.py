@@ -252,6 +252,7 @@ def get_or_train_cav(concepts,
     if cav_dir is not None:
         if not os.path.exists(cav_dir):
             os.makedirs(cav_dir)
+            
         cav_path = os.path.join(
             cav_dir,
             CAV.cav_key(concepts, bottleneck, cav_hparams['model_type'],

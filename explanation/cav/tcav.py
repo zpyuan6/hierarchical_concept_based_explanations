@@ -133,22 +133,50 @@ class TCAV:
                 target,
                 concepts,
                 bottlenecks,
-                activation_generator,
+                activation_generator:ActivationGenerator,
                 alphas,
                 random_counterpart=None,
                 cav_dir=None,
                 num_random_exp=5,
                 random_concepts=None):
+        """Initialze tcav class.
+            Args:
+                sess: tensorflow session.
+                target: one target class
+                concepts: A list of names of positive concept sets.
+                bottlenecks: the name of a bottleneck of interest.
+                activation_generator: an ActivationGeneratorInterface instance to return
+                                        activations.
+                alphas: list of hyper parameters to run
+                cav_dir: the path to store CAVs
+                random_counterpart: the random concept to run against the concepts for
+                              statistical testing. If supplied, only this set will be
+                              used as a positive set for calculating random TCAVs
+                num_random_exp: number of random experiments to compare against.
+                random_concepts: A list of names of random concepts for the random
+                                  experiments to draw from. Optional, if not provided, the
+                                  names will be random500_{i} for i in num_random_exp.
+                                  Relative TCAV can be performed by passing in the same
+                                  value for both concepts and random_concepts.
+        """
+        self.target = target
+        self.concepts = concepts
+        self.bottlenecks = bottlenecks
+        self.activation_generator = activation_generator
+        self.cav_dir = cav_dir
+        self.mymodel = activation_generator.model
+
+        self.params = self.get_params()
 
 
-    def get_params(self):
+    def get_params(self) -> list:
         params = []
         for bottleneck in self.bottlenecks:
             for target_in_test, concepts_in_test in self.pairs_to_test:
                 for alpha in self.alphas:
                   print('%s %s %s %s', bottleneck, concepts_in_test,
                                   target_in_test, alpha)
-                  params.append({"bottleneck":bottleneck,"concepts":concepts,"target_class":target_class,"activation_generator":activation_generator,"cav_dir":cav_dir:,"overwrite":overwrite,"model":model})
+                  params.append(TCAVRunParams())
 
         return params
 
@@ -164,7 +192,7 @@ class TCAV:
         print('running %s %s' % (target_class, concept[0]))
 
         # Get acts
-        acts = activation_generator.process_and_load_activations(bottlenecks, concept+[target])
+        acts = activation_generator.process_and_load_activations(bottleneck, concept+[target_class])
 
         # Get CAVs
         cav_instance = get_or_train_cav(
@@ -181,19 +209,17 @@ class TCAV:
 
         # Hypo testing
 
-        target_class_for_compute_tcav_score = target
-
         cav_concept = concept
 
         class_dir = ImageNet(IMAGENET_DATASET_PATH, download=False).class_to_idx
-        class_id = class_dir[target_class_for_compute_tcav_score]
+        class_id = class_dir[target_class]
 
         i_up = compute_tcav_score(
             model, 
             class_id,
-            cav_concept,
+            concept,
             cav_instance, 
-            activation_generator.get_examples_for_concept(target),
+            activation_generator.get_examples_for_concept(target_class),
             )
 
         print("i_up", i_up)
@@ -201,9 +227,9 @@ class TCAV:
         val_directional_dirs = get_directional_dir(
             model,
             class_id,
-            cav_concept,
+            concept,
             cav_instance,
-            activation_generator.get_examples_for_concept(target)
+            activation_generator.get_examples_for_concept(target_class)
             )
 
         print("val_directional_dirs", val_directional_dirs)
@@ -246,7 +272,7 @@ class TCAV:
 
         for i, param in enumerate(self.params):
             print('Running param %s of %s' % (i, len(self.params)))
-            results.append(self._run_single_set(param, overwrite=overwrite))
+            results.append(self._run_single_set(param))
         print('Done running %s params. Took %s seconds...' % (len(self.params), time.time() - now))
 
         return results
